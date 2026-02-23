@@ -13,10 +13,24 @@ import pygsheets
 from datetime import datetime, timedelta
 
 import os
+import json
 
 # 設定 Google API 認證
 def authenticate_google():
-    client = pygsheets.authorize(service_file='Superb_IAM_admin.json')
+    google_creds_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+    if google_creds_json:
+        # Vercel：從環境變數讀取 Google Service Account JSON 內容
+        from google.oauth2.service_account import Credentials
+        service_account_info = json.loads(google_creds_json)
+        scopes = [
+            'https://spreadsheets.google.com/feeds',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        creds = Credentials.from_service_account_info(service_account_info, scopes=scopes)
+        client = pygsheets.authorize(custom_credentials=creds)
+    else:
+        # 本地開發：使用 JSON 檔案
+        client = pygsheets.authorize(service_file='Superb_IAM_admin.json')
     return client
 
 # 取得 Google 試算表
@@ -245,6 +259,93 @@ def update_progress(teacherId, classingRow, messageStr):
 def update_homework(teacherId, classingRow, messageStr):
     update_cell_data(sheet_dataForthisMonth, classingRow, 8, messageStr)
     update_teacherState(teacherId, 'normal')
+
+# 上課打卡通知格式
+def getFlexStartTimeMessageF(date_str, time_str, name):
+    return FlexSendMessage(
+        alt_text='課程已開始',
+        contents={
+  "type": "bubble",
+  "size": "kilo",
+  "body": {
+    "type": "box",
+    "layout": "vertical",
+    "spacing": "md",
+    "contents": [
+      {
+        "type": "text",
+        "text": f"{name}今日課程已開始",
+        "weight": "bold",
+        "size": "xl",
+        "color": "#2768A8",
+        "align": "center",
+        "margin": "lg"
+      },
+      {
+        "type": "box",
+        "layout": "vertical",
+        "spacing": "md",
+        "margin": "xl",
+        "contents": [
+          {
+            "type": "box",
+            "layout": "baseline",
+            "contents": [
+              {
+                "type": "text",
+                "text": "上課日期",
+                "weight": "bold",
+                "color": "#2768A8",
+                "margin": "sm"
+              },
+              {
+                "type": "text",
+                "text": date_str,
+                "size": "sm",
+                "color": "#AAAAAA",
+                "align": "end"
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "baseline",
+            "contents": [
+              {
+                "type": "text",
+                "text": "上課時間",
+                "weight": "bold",
+                "color": "#2768A8",
+                "flex": 0,
+                "margin": "sm"
+              },
+              {
+                "type": "text",
+                "text": time_str,
+                "size": "sm",
+                "color": "#AAAAAA",
+                "align": "end"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "text": f"請記得下課打卡！",
+        "size": "sm",
+        "color": "#AAAAAA",
+        "align": "center",
+        "margin": "lg"
+      }
+    ]
+  },
+  "styles": {
+    "body": {
+      "backgroundColor": "#FFFFFF"
+    }
+  }
+})
 
 # 本次上課時間確認格式
 def getFlexTimeMessageF(time1, time2, name, duration):
@@ -825,9 +926,11 @@ def handle_postback(events):
         message_dateTime_str = message_dateTime.strftime('日期: %Y-%m-%d, 時間: %H:%M')
         if events.postback.data == '資料上課':
             add_startTime(events.source.user_id, events.source.group_id, message_dateTime)
-            message_dateTime_str = message_dateTime.strftime('\U0001F31F 今天課程已開始 \U0001F31F\n\n日期：%Y / %m / %d\n開始上課時間：%H：%M\n\n請記得下課打卡！')
-            replyTextMessage = TextSendMessage(text=message_dateTime_str)
-            line_bot_api.reply_message(events.reply_token, replyTextMessage)
+            dateStr = message_dateTime.strftime('%Y / %m / %d')
+            timeStr = message_dateTime.strftime('%H:%M')
+            namestr = get_groupName(events.source.group_id)
+            flexMessage = getFlexStartTimeMessageF(dateStr, timeStr, namestr)
+            line_bot_api.reply_message(events.reply_token, flexMessage)
         elif events.postback.data == '資料下課':
             row = find_endTimeRow(events.source.user_id, message_dateTime)
             if row != 'Error':
@@ -856,7 +959,6 @@ def handle_postback(events):
         replyTextMessage = TextSendMessage(text=message_dateTime_str)
         line_bot_api.reply_message(events.reply_token, replyTextMessage)
 
-import os
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
