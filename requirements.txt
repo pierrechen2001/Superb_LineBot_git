@@ -1,3 +1,4 @@
 Flask
 line-bot-sdk<3.0.0
 pygsheets
+aiohttp>=3.9.0
