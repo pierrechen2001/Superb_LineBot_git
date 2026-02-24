@@ -14,19 +14,21 @@ pip install -r requirements.txt
 
 # Run locally (requires env vars and Superb_IAM_admin.json)
 python app.py
-
-# Deploy to Vercel
-vercel        # 預覽部署
-vercel --prod # 正式部署
 ```
 
-## Required Environment Variables
+## Deployment (Zeabur)
 
-需在 Vercel Dashboard 的 Project Settings → Environment Variables 設定：
+Zeabur 透過 `Procfile` 啟動（`web: python app.py`）。部署流程：
+1. 將 repo 連接到 Zeabur 專案
+2. 在 Zeabur Dashboard → Environment Variables 設定以下變數
+3. Redeploy
+
+## Required Environment Variables
 
 - `LINE_CHANNEL_ACCESS_TOKEN` — LINE Messaging API token
 - `LINE_CHANNEL_SECRET` — LINE webhook secret
 - `GOOGLE_SERVICE_ACCOUNT_JSON` — `Superb_IAM_admin.json` 的完整 JSON 內容（貼上整個檔案的文字）
+- `SPREADSHEET_ID` — Google 試算表 ID（網址 `/d/` 後面那串）
 
 ## Required Files (gitignored, 本地開發用)
 
