@@ -48,24 +48,25 @@ def add_row_data(sheet, row_data):
 def update_cell_data(sheet, row, col, value):
     sheet.update_value((row, col), value)
 
-# 設定試算表和工作表資訊
-SPREADSHEET_ID = ""  # 試算表 ID
-SHEET_NAME = ""  # 工作表名稱
+# 試算表 ID 從環境變數讀取
+SPREADSHEET_ID = os.environ.get('SPREADSHEET_ID', '')
 
-# 取得試算表和工作表
-sheet_forTest = get_sheet('google.location', 'forTest')
+# 懶載入：首次收到請求時才初始化，避免 import 階段呼叫外部 API
+sheet_forTest = None
+sheet_teacherInfo = None
+sheet_groupInfo = None
+sheet_dataForthisMonth = None
 
-# 例如，新增一行資料
-# row_data = ["資料1", "資料2", "資料3"]
-# add_row_data(sheet_forTest, row_data)
-
-# 例如，更新特定儲存格的資料
-# row = 5
-# col = 6
-# value = "更新"
-
-# 設定teacherInfo試算表和工作表資訊(Id,state,name)
-sheet_teacherInfo = get_sheet('google.location', 'teacherInfo')
+def _init_sheets():
+    global sheet_forTest, sheet_teacherInfo, sheet_groupInfo, sheet_dataForthisMonth
+    if sheet_teacherInfo is not None:
+        return
+    client = authenticate_google()
+    spreadsheet = client.open_by_key(SPREADSHEET_ID)
+    sheet_forTest = spreadsheet.worksheet_by_title('forTest')
+    sheet_teacherInfo = spreadsheet.worksheet_by_title('teacherInfo')
+    sheet_groupInfo = spreadsheet.worksheet_by_title('groupInfo')
+    sheet_dataForthisMonth = spreadsheet.worksheet_by_title('dataForthisMonth')
 
 # 當有人點擊登記老師按鈕時，新增一行資料，並將state設為adding
 def add_teacherInfo(userId):
@@ -123,9 +124,6 @@ def update_teacherState(teacherId, state):
     else:
         return 'Error'
         
-# 設定groupInfo試算表和工作表資訊(groupId, state, respTeacher, name, teacher, teacherPay, cost)
-sheet_groupInfo = get_sheet('google.location', 'groupInfo')
-
 # 當有人點擊設定群組學生資訊按鈕時，新增一行資料
 def add_groupInfo(groupId, respTeacherId):
     respTName = get_teacherName(respTeacherId)
@@ -185,9 +183,6 @@ def update_groupInfoTeacher(groupId, name):
         update_cell_data(sheet_groupInfo, index, 5, name)  # 更新 teacher name
     else:
         return 'Error'
-
-#登記打卡上課時間
-sheet_dataForthisMonth = get_sheet('google.location', 'dataForthisMonth')
 
 # 當有打卡上課時，新增上課資訊
 def add_startTime(userId, groupId, message_dateTime):
@@ -751,6 +746,7 @@ handler = WebhookHandler(os.environ.get('LINE_CHANNEL_SECRET'))
 # 監聽所有來自 /callback 的 Post Request
 @app.route("/callback", methods=['POST'])
 def callback():
+    _init_sheets()
     # get X-Line-Signature header value
     signature = request.headers['X-Line-Signature']
     # get request body as text
